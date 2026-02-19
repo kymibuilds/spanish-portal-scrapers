@@ -222,8 +222,10 @@ async def scrape_empresite(region, city, limit, **kwargs):
                     "source_url": detail_url,
                 }
 
-                # Optionally scrape detail page
-                if kwargs.get("details") and detail_url:
+                # Scrape detail page for website URL (+ CNAE/phone/email)
+                # Website URLs let us scrape emails directly instead of paying APIs
+                # Default: ON. Use --no-details to skip (faster but no website)
+                if detail_url and kwargs.get("details", True):
                     await asyncio.sleep(random.uniform(MIN_DELAY, MAX_DELAY))
                     try:
                         dresp = _cffi_fetch(detail_url)
@@ -580,6 +582,17 @@ async def scrape_einforma(region, city, limit, headless=False, **kwargs):
                         m = re.search(r"[A-Z]\d{7,8}", (await cif_el.inner_text()).strip())
                         if m:
                             c["cif"] = m.group(0)
+
+                    # Website — look for external company links
+                    excluded = ("einforma", "axesor", "google", "facebook", "twitter", "linkedin")
+                    web_els = await row.query_selector_all("a[href^='http']")
+                    for wel in web_els:
+                        href = await wel.get_attribute("href")
+                        if href and not any(d in href.lower() for d in excluded):
+                            c["website_url"] = href
+                            c["domain"] = urlparse(href).netloc.replace("www.", "")
+                            break
+
                     companies.append(c)
             elif links:
                 for link in links:
@@ -837,6 +850,17 @@ async def scrape_librebor(region, city, limit, headless=False, **kwargs):
                     cnae_m = re.search(r"CNAE:\s*(\d{3,4})", text)
                     if cnae_m:
                         c["cnae_code"] = cnae_m.group(1)
+
+                    # Website — look for external company links
+                    excluded = ("librebor", "libreborme", "google", "facebook", "twitter", "linkedin")
+                    web_els = await page.query_selector_all("a[href^='http']")
+                    for wel in web_els:
+                        href = await wel.get_attribute("href")
+                        if href and not any(d in href.lower() for d in excluded):
+                            c["website_url"] = href
+                            c["domain"] = urlparse(href).netloc.replace("www.", "")
+                            break
+
                     companies.append(c)
                 pnum += 1
                 continue
@@ -892,7 +916,7 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Max companies to scrape")
     parser.add_argument("--output", "-o", default=None, help="Output file (default: stdout)")
     parser.add_argument("--headless", action="store_true", help="Run browser headless (may get blocked)")
-    parser.add_argument("--details", action="store_true", help="Scrape detail pages (empresite)")
+    parser.add_argument("--no-details", action="store_true", help="Skip detail pages for empresite (faster but no website/CNAE/phone)")
     parser.add_argument("--employee-min", type=int, default=10)
     parser.add_argument("--employee-max", type=int, default=200)
     parser.add_argument("--delay-min", type=float, default=4.0, help="Min delay between requests (seconds)")
@@ -909,7 +933,7 @@ def main():
         city=args.city.upper() if args.city else None,
         limit=args.limit,
         headless=args.headless,
-        details=args.details,
+        details=not args.no_details,
         employee_min=args.employee_min,
         employee_max=args.employee_max,
     ))

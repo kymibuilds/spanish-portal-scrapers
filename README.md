@@ -22,6 +22,10 @@ We needed to scrape multiple Spanish business portals to build a B2B lead databa
 - DNB/Infobel — enterprise subscription only
 - Infocif — unreliable, frequently down
 
+### Website-first ideology
+
+All scrapers prioritize grabbing `website_url` early. If we have the company's domain, we can scrape their website directly for emails — for free — instead of paying per-lookup email finder APIs (Hunter, Apollo, etc.). This is why Empresite defaults to always fetching detail pages even though it doubles the requests: the website URL is worth the extra 5 seconds.
+
 ### Key technical decisions
 
 1. **curl_cffi for Empresite** — It mimics Chrome's TLS/JA3 fingerprint at the HTTP level, so no browser needed. 10x faster than Playwright. This is the best candidate for Cloudflare Workers deployment since it's just HTTP requests.
@@ -52,11 +56,11 @@ playwright install chromium
 ## Usage
 
 ```bash
-# Empresite — HTTP only, fastest, no browser needed
+# Empresite — HTTP only, always fetches detail pages for website/CNAE/phone/email
 python scrape.py --portal empresite --region BARCELONA --limit 100 -o results.json
 
-# With detail pages (adds CNAE, phone, email — slower, 2 requests per company)
-python scrape.py --portal empresite --region BARCELONA --details --limit 50 -o results.json
+# Skip detail pages for speed (no website/CNAE/phone — just names + addresses)
+python scrape.py --portal empresite --region BARCELONA --no-details --limit 100 -o results.json
 
 # Europages — B2B marketplace, employee counts + websites
 python scrape.py --portal europages --region BARCELONA --limit 50 -o results.json
